@@ -1,0 +1,13 @@
+# 统一按 LF 存进仓库（Windows 上检出时由 Git 自动转换），
+# 避免不同平台 clone 下来出现整文件"被修改"的假象。
+* text=auto eol=lf
+
+# 二进制资源：不做行尾转换，也不做文本 diff
+*.png binary
+*.ico binary
+
+# C# / XAML 仍视为文本
+*.cs text
+*.xaml text
+*.csproj text
+*.md text

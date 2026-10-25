@@ -1,0 +1,325 @@
+<Window x:Class="PeripheralBattery.UI.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:PeripheralBattery.UI"
+        xmlns:models="clr-namespace:PeripheralBattery.Models"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="外设电量"
+        Width="380" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual"
+        Background="{DynamicResource BgBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI" FontSize="13"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+
+    <!-- 无边框 + 系统原生圆角（Win11 圆角由 DWM 负责，见 WindowFx） -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="0"
+                            GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <ui:LevelStarConverter x:Key="FillStar"/>
+        <ui:LevelStarConverter x:Key="RestStar" Rest="True"/>
+        <ui:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <ui:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True"/>
+
+        <!-- 标题栏上的小图标按钮 -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 设备行的右键菜单：深色/浅色跟随主题，圆角、无边框感 -->
+        <ContextMenu x:Key="RowMenu"
+                     Background="{DynamicResource CardBrush}"
+                     Foreground="{DynamicResource TextPrimaryBrush}"
+                     BorderBrush="{DynamicResource DividerBrush}"
+                     BorderThickness="1" Padding="4"
+                     HasDropShadow="True">
+            <ContextMenu.Resources>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Padding" Value="10,5"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="MenuItem">
+                                <Border x:Name="Bd" CornerRadius="6" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Opacity" Value="0.45"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                <Style TargetType="Separator">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Separator">
+                                <Border Height="1" Margin="6,4" Background="{DynamicResource DividerBrush}"/>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ContextMenu.Resources>
+
+            <MenuItem Header="重命名…" Click="Menu_Rename_Click"/>
+            <MenuItem Header="恢复默认名称" Click="Menu_ResetName_Click"/>
+            <Separator/>
+            <MenuItem Header="设为主设备" Click="Menu_SetPrimary_Click"/>
+            <MenuItem Header="取消主设备" Click="Menu_ClearPrimary_Click"/>
+            <Separator/>
+            <MenuItem Header="立即刷新" Click="Menu_Refresh_Click"/>
+            <MenuItem Header="从面板中移除" Click="Menu_Remove_Click"/>
+        </ContextMenu>
+
+        <!-- 一行设备：图标 + 名称/连接方式 + 百分比/电量条 -->
+        <DataTemplate x:Key="DeviceRow">
+            <Border x:Name="Row" CornerRadius="9" Padding="10,8" Margin="0,1"
+                    Background="Transparent"
+                    MouseLeftButtonDown="Row_MouseLeftButtonDown">
+                <Border.ContextMenu>
+                    <StaticResource ResourceKey="RowMenu"/>
+                </Border.ContextMenu>
+                <Border.ToolTip>
+                    <ToolTip Content="双击或右键可重命名" FontSize="11.5"/>
+                </Border.ToolTip>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Path Grid.Column="0"
+                          Data="{Binding IconGeometry}"
+                          Stroke="{DynamicResource TextSecondaryBrush}"
+                          StrokeThickness="1.5" StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Width="20" Height="20" Stretch="Uniform"
+                          VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <!-- 名字用 Grid 分两列（名字 * / 标记 Auto），不用水平 StackPanel：
+                             StackPanel 不给子元素宽度约束，长名字会直接溢出、压到右边的电量区，
+                             而且那份 TextTrimming 根本不会生效。现在名字有宽度约束，超长时**换行**
+                             而不是截断 —— "PRO X SUPERLIGHT 2 SE" 这类型号被截成 "PRO X SUPER…"
+                             会分不清是哪台设备。 -->
+                        <Grid Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextWrapping="Wrap"/>
+                            <!-- 主设备标记：小圆点 + 文字，比只换个颜色更好认 -->
+                            <Border Grid.Column="1" x:Name="PrimaryTag" CornerRadius="4" Padding="4,0,4,1" Margin="7,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Background="{DynamicResource AccentSoftBrush}"
+                                    Visibility="{Binding IsPrimary, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="主设备" FontSize="9.5"
+                                           Foreground="{DynamicResource AccentBrush}"/>
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding SubText}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="11" Margin="0,2,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}"/>
+                        <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"
+                                 FontSize="12" Padding="4,2" Margin="0,-2,0,0"
+                                 Background="{DynamicResource CardBrush}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                 BorderBrush="{DynamicResource AccentBrush}"
+                                 CaretBrush="{DynamicResource AccentBrush}"
+                                 KeyDown="Rename_KeyDown" LostFocus="Rename_LostFocus"
+                                 IsVisibleChanged="Rename_IsVisibleChanged"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center"
+                                HorizontalAlignment="Right" Margin="10,0,0,0"
+                                Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}">
+                        <!-- 电量区：充电时在数字左边挂一个小闪电图标，数字本身始终是真实读数。
+                             早先是把文字直接写成"充电中 100%"，插着线时读到 79% 也会显示 100%，
+                             等于在骗人；改成"图标 + 真实电量"后两者都成立。
+                             充着电但读不到电量的设备（比如有线模式的键盘）则显示"充电中"三个字，
+                             这时图标和文字同时出现，信息不重不漏。 -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Path Data="{x:Static models:DeviceIcons.Charge}"
+                                  Fill="{Binding ChargeBrush}"
+                                  Width="9" Height="9" Stretch="Uniform"
+                                  Margin="0,1,3,0" VerticalAlignment="Center"
+                                  ToolTip="{Binding LevelHint}"
+                                  Visibility="{Binding ShowChargeIcon, Converter={StaticResource BoolToVis}}"/>
+                            <!-- 读不到电量时统一画一个"电池+斜杠"图标（描边、次要色，存在感比数字低），
+                                 替代以前的破折号 —— 破折号在比例字体里跟对齐用的空格混在一起，
+                                 容易被看成"少打了个字"或者干脆被忽略掉。 -->
+                            <Path Data="{x:Static models:DeviceIcons.Unknown}"
+                                  Stroke="{DynamicResource TextSecondaryBrush}"
+                                  StrokeThickness="1.2" Fill="Transparent"
+                                  Width="16" Height="16" Stretch="Uniform"
+                                  Margin="0,1,2,0" VerticalAlignment="Center"
+                                  ToolTip="{Binding LevelHint}"
+                                  Visibility="{Binding ShowLevelUnknown, Converter={StaticResource BoolToVis}}"/>
+                            <!-- 文字右对齐、不给固定宽度，让这一列随内容自适应；
+                                 下面的电量条固定 56px 同样右对齐，整体是"数字在上、条在下"的一叠。 -->
+                            <TextBlock Text="{Binding PercentText}"
+                                       Foreground="{Binding LevelBrush}"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       ToolTip="{Binding LevelHint}"/>
+                        </StackPanel>
+                        <!-- 没有读数时连条一起藏起来：画个空槽会被读成"0%"，比不画更糟 -->
+                        <Grid Width="56" Height="4" Margin="0,4,0,0"
+                              HorizontalAlignment="Right"
+                              Visibility="{Binding HasLevel, Converter={StaticResource BoolToVis}}">
+                            <Border CornerRadius="2" Background="{DynamicResource TrackBrush}"/>
+                            <!-- 电量条用两个星号列实现：左列权重 = 电量，右列 = 100 - 电量，
+                                 由 LevelStarConverter 把百分数变成 GridLength。这样不用写任何进度条控件，
+                                 宽度拉伸、主题换色都自动跟随。 -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{Binding EffectivePercent, Converter={StaticResource FillStar}}"/>
+                                    <ColumnDefinition Width="{Binding EffectivePercent, Converter={StaticResource RestStar}}"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" CornerRadius="2" Background="{Binding LevelBrush}"/>
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 头部：标题 + 更新时间 + 刷新/设置 -->
+            <Grid Grid.Row="0" Margin="16,14,12,6">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="外设电量" FontSize="15.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Text="{Binding LastRefreshText}" FontSize="11" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <!-- 指定主设备后，用一行小字说清"托盘图标跟的是谁"，避免和面板里的最低值混淆 -->
+                    <TextBlock Text="{Binding PrimaryCaption}" FontSize="10.5" Margin="0,2,0,0"
+                               MaxWidth="250" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Visibility="{Binding HasPrimary, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <!-- 刷新按钮：点击时图标旋转一圈 + 变强调色，给一个"我收到了"的反馈 -->
+                    <Button x:Name="RefreshButton" Style="{StaticResource IconButton}"
+                            Click="Refresh_Click" ToolTip="立即刷新">
+                        <Path x:Name="RefreshGlyph"
+                              Data="M20,12 A8,8 0 1,1 16,5.1 M20,4 V8 H16"
+                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                              Width="17" Height="17" Stretch="Uniform"
+                              RenderTransformOrigin="0.5,0.5">
+                            <Path.RenderTransform>
+                                <RotateTransform x:Name="RefreshRotate" Angle="0"/>
+                            </Path.RenderTransform>
+                        </Path>
+                    </Button>
+                    <Button Style="{StaticResource IconButton}" Click="Settings_Click" ToolTip="设置" Margin="2,0,0,0">
+                        <!-- 三条滑杆 = 设置，比齿轮更不会看错 -->
+                        <Path Data="M3,7.5 H21 M3,12 H21 M3,16.5 H21
+                                   M9,5.9 V9.1 M15,10.4 V13.6 M7.5,14.9 V18.1"
+                              Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Width="17" Height="17" Stretch="Uniform"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- 在线设备 -->
+            <ScrollViewer Grid.Row="1" MaxHeight="430" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" Margin="7,2,7,6"
+                          Focusable="False">
+                <Grid>
+                    <ItemsControl ItemsSource="{Binding Online}" ItemTemplate="{StaticResource DeviceRow}">
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
+
+                    <!-- 一台设备都没读到时的空状态 -->
+                    <StackPanel Margin="12,14,12,16"
+                                Visibility="{Binding HasOnline, Converter={StaticResource InverseBoolToVis}}">
+                        <TextBlock Text="没有读到设备电量" FontSize="12.5"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="请确认键鼠已开机、蓝牙耳机/手柄已连接。找不到的原因可看 README 的『支持范围』。"
+                                   FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+
+            <!-- 历史设备（离线时折叠） -->
+            <Expander Grid.Row="2" Margin="14,0,14,8"
+                      Visibility="{Binding ShowOfflineSection, Converter={StaticResource BoolToVis}}"
+                      Foreground="{DynamicResource TextSecondaryBrush}">
+                <Expander.Header>
+                    <TextBlock Text="{Binding OfflineHeader}" FontSize="11.5"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Expander.Header>
+                <ItemsControl ItemsSource="{Binding Offline}" ItemTemplate="{StaticResource DeviceRow}"
+                              Opacity="0.6" Margin="-7,0,-7,0"/>
+            </Expander>
+
+            <!-- 底部状态 -->
+            <Border Grid.Row="3" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}"
+                    Padding="16,8">
+                <Grid>
+                    <TextBlock x:Name="FooterText" Text="{Binding FooterText}" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock x:Name="FlashBar" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Visibility="Collapsed"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

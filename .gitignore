@@ -1,0 +1,21 @@
+# 构建产物
+bin/
+obj/
+dist/
+
+# IDE / 用户数据
+*.user
+*.suo
+.vs/
+
+# 编辑器与系统杂项
+.vscode/
+Thumbs.db
+desktop.ini
+
+# WorkBuddy 的项目记忆（内部决策记录，不随代码发布）
+.workbuddy/
+
+# 开发过程中的临时对比图。
+# README 只引用 screenshot-*.png，其余 ui_*.png 是调版式时随手生成的，不该进仓库。
+docs/ui_*.png

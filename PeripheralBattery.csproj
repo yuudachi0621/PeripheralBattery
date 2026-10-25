@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 目标框架带 Windows SDK 版本，才能直接用 WinRT 的蓝牙 GATT 接口 -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>   <!-- 只为托盘图标（NotifyIcon） -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>PeripheralBattery</AssemblyName>
+    <RootNamespace>PeripheralBattery</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 程序图标：任务栏 / 开始菜单 / 资源管理器 / 文件属性 都用它。
+         生成脚本见 tools/make_icon.py（改了配色就重跑一次）。 -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- 本机只装了 .NET 6/7/10 运行时，允许 net8 程序在更高大版本运行时上跑 -->
+    <RollForward>LatestMajor</RollForward>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+    <!-- WFAC010 是 WinForms 分析器对清单里 DPI 设置的提醒；本项目是 WPF，DPI 就该写在清单里 -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+
+</Project>

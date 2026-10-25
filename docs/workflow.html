@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>外设电量 · 工作流程图</title>
+<style>
+  :root{
+    --bg:#faf9f5; --card:#ffffff; --line:#e8e4da; --ink:#1f1e1b; --muted:#736f66;
+    --accent:#d97757; --accent-soft:#faeee8;
+    --green:#6d9e5c; --amber:#c88b3a; --red:#c04b3f; --soft:#f0eee7;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:40px 20px 64px; background:var(--bg); color:var(--ink);
+    font:14px/1.65 "Microsoft YaHei UI","Segoe UI",system-ui,sans-serif;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px;letter-spacing:.2px}
+  .lead{color:var(--muted);margin:0 0 34px;font-size:13.5px}
+  h2{font-size:16px;margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h2 .idx{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+
+  /* ---------- 纵向流程图 ---------- */
+  .flow{display:flex;flex-direction:column;align-items:center}
+  .node{
+    width:min(520px,100%); background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:11px 16px; box-shadow:0 1px 2px rgba(20,18,14,.03);
+  }
+  .node .t{font-weight:600;font-size:13.5px}
+  .node .sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .node.start{border-color:#f0d3c6;background:#fdf6f2}
+  .node.end{border-color:#e6ddc8;background:#fbf8f0}
+  .arrow{color:#b9b4aa;font-size:15px;line-height:1;margin:7px 0}
+  .branch{
+    width:min(520px,100%); margin:8px 0 0; padding:8px 14px 8px 16px;
+    border-left:2px dashed #e8cabb; color:var(--muted); font-size:12.5px; background:transparent;
+  }
+  .loop{
+    width:min(520px,100%); border:1px solid #f0d3c6; border-radius:12px;
+    background:#fdf6f2; padding:12px 16px;
+  }
+  .loop .h{font-weight:600;font-size:13px;color:#a34b2e;margin-bottom:8px}
+  .loop ul{margin:0;padding-left:18px;font-size:12.5px;color:#4a3a33}
+  .loop li{margin:3px 0}
+  .loop code{background:#f7e3d9;border-radius:4px;padding:1px 5px;font-size:11.5px}
+
+  /* ---------- 四通道数据流 ---------- */
+  .lanes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .lane{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .lane .hd{padding:9px 13px;font-size:12.5px;font-weight:600;border-bottom:1px solid var(--line)}
+  .lane.logi .hd{background:#f0f4ec;color:#3f5c32}
+  .lane.btc  .hd{background:#eef1f6;color:#31445e}
+  .lane.ble  .hd{background:#fdf4e8;color:#8a5b12}
+  .lane.opo  .hd{background:#fdf0ea;color:#a34b2e}
+  .lane .bd{padding:10px 13px;font-size:12px;color:#3a3733}
+  .step{display:flex;gap:7px;margin:0 0 6px}
+  .step i{
+    flex:0 0 16px;height:16px;border-radius:50%;background:var(--soft);color:var(--muted);
+    font-style:normal;font-size:10.5px;text-align:center;line-height:16px;margin-top:2px;
+  }
+  .lane .res{
+    margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;font-weight:600;
+  }
+  .res.ok{color:var(--green)} .res.no{color:var(--red)} .res.warn{color:var(--amber)}
+  .res.hi{color:var(--accent)}
+  .join{
+    margin:16px auto 0; width:min(760px,100%); text-align:center; color:#b9b4aa; font-size:15px;
+  }
+  .merge{
+    width:min(760px,100%); margin:0 auto; background:var(--card); border:1px solid var(--line);
+    border-left:3px solid var(--accent); border-radius:12px; padding:12px 16px;
+  }
+  .merge .t{font-weight:600;font-size:13.5px}
+  .merge ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:#3a3733}
+  .merge li{margin:3px 0}
+  code{font-family:Consolas,"Cascadia Mono",monospace}
+
+  /* ---------- 表格 ---------- */
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+        border-radius:12px;overflow:hidden;font-size:12.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f6f4ef;font-weight:600;font-size:12px;color:#4a4640}
+  tr:last-child td{border-bottom:none}
+  td.k{font-family:Consolas,monospace;font-size:12px;color:#a34b2e;white-space:nowrap}
+
+  .note{
+    margin-top:14px;padding:11px 14px;border-radius:10px;background:#fdfaf3;
+    border:1px solid #efe6cd;font-size:12.5px;color:#6b5a2a;
+  }
+  footer{margin-top:46px;color:#a9a49b;font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>外设电量 · 工作流程图</h1>
+  <p class="lead">上半部分是进程的完整生命周期与调度，下半部分是一轮轮询里四条通道各自做了什么、结果怎么合并。<br>
+     HID 通道先独占跑完，再放蓝牙类通道并行 —— 这个顺序是实测调出来的，原因写在第二节。</p>
+
+  <h2><span class="idx">01</span>进程生命周期与调度</h2>
+
+  <div class="flow">
+    <div class="node start">
+      <span class="t">启动</span>
+      <span class="sub">开机自启（<code>--tray</code>） / 双击 exe / 已有实例被再次点击</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">单实例检查</span>
+      <span class="sub">命名互斥体 + 命名事件，保证托盘里只有一个图标</span>
+    </div>
+    <div class="branch">↳ 若已有实例在运行：向它发信号让它弹出面板，本进程立即退出</div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">初始化</span>
+      <span class="sub">读 config.json → 跟随系统深浅色 → 按配置同步 Run 注册表（开机自启）</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">建托盘图标 + 启动定时器</span>
+      <span class="sub">图标用 GDI+ 现画电池（最低电量着色），不读图标文件</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="loop">
+      <div class="h">常驻循环（事件驱动，空闲时几乎不活动）</div>
+      <ul>
+        <li><b>定时器到点</b>：先看用户是否空闲超过 5 分钟 ——<br>是则只跑 1/4 次数（<code>ThrottleWhenIdle</code>）</li>
+        <li><b>点击托盘 / 面板 ↻ / 右键"立即刷新"</b>：忽略降频，马上读一轮<br>若已有轮询在跑，则排队补一轮（不丢点击）</li>
+        <li><b>休眠唤醒 / 会话解锁</b>：立刻补一次，避免显示过期电量</li>
+      </ul>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">执行一轮轮询</span>
+      <span class="sub">先跑 HID 通道（罗技 2.4G），再让三条蓝牙类通道并行，单通道 25 秒硬超时 → 见下方「数据流」</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">合并 + 刷新界面</span>
+      <span class="sub">在线 / 历史分组 → 重画托盘图标（仅档位或低电量状态变化时）+ 更新面板</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">低电量检查</span>
+      <span class="sub">低于阈值 → 托盘图标转红带感叹号角标 → 弹一次 Windows 通知（同一次放电只提醒一次）</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">
+      <span class="t">持久化</span>
+      <span class="sub">设备增减立刻写盘；否则最多 10 分钟一次，避免频繁 IO</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node end">
+      <span class="t">退出（右键菜单）</span>
+      <span class="sub">存盘 → 移除托盘图标 → 释放信号量与互斥体</span>
+    </div>
+  </div>
+
+  <h2><span class="idx">02</span>一轮轮询的数据流</h2>
+
+  <div class="lanes">
+    <div class="lane logi">
+      <div class="hd">① 罗技 2.4G 通道（先跑）</div>
+      <div class="bd">
+        <div class="step"><i>1</i><span>SetupAPI 枚举 HID 接口</span></div>
+        <div class="step"><i>2</i><span>筛出 <code>VID_046D</code> 且 UsagePage=<code>0xFF00</code>、报文 20 字节的接口</span></div>
+        <div class="step"><i>3</i><span>扫设备索引 <code>0xFF</code>、<code>1~6</code>，用 HID++ 2.0 Ping 探活</span></div>
+        <div class="step"><i>4</i><span>读 <code>0x0005</code> 名称、<code>0x0002</code> 序列号</span></div>
+        <div class="step"><i>5</i><span>读 <code>0x1004</code> 统一电量（含充电状态）</span></div>
+        <div class="res ok">GPW2 → 41%</div>
+      </div>
+    </div>
+
+    <div class="lane opo">
+      <div class="hd">② OPPO 耳机通道（并行）</div>
+      <div class="bd">
+        <div class="step"><i>1</i><span>AQS 取「已连接」的经典蓝牙设备</span></div>
+        <div class="step"><i>2</i><span>查 RFCOMM 服务 <code>0000079A-D102-…A5A5</code>（BBK 系私有控制通道）</span></div>
+        <div class="step"><i>3</i><span>连上后发 <code>0x0106</code>，收 <code>0x8106</code></span></div>
+        <div class="step"><i>4</i><span>解析 <code>(part, raw)</code>：01 左耳 / 02 右耳 / 03 盒，bit7 = 充电</span></div>
+        <div class="res hi">Enco Free4 → 左 60% / 右 50% → 取 50%</div>
+      </div>
+    </div>
+
+    <div class="lane ble">
+      <div class="hd">③ 蓝牙 LE 通道（并行）</div>
+      <div class="bd">
+        <div class="step"><i>1</i><span>AQS 只取「已连接」的 BLE 设备（关机设备不再空等超时）</span></div>
+        <div class="step"><i>2</i><span>按 UUID 单查电池服务 <code>0x180F</code>，不做全量服务发现</span></div>
+        <div class="step"><i>3</i><span>读电量特征 <code>0x2A19</code>；多实例取最小值</span></div>
+        <div class="step"><i>4</i><span>读完立刻释放连接，不长期占用射频</span></div>
+        <div class="res ok">Xbox 手柄 → 读 0x2A19</div>
+      </div>
+    </div>
+
+    <div class="lane btc">
+      <div class="hd">④ 经典蓝牙通道（并行）</div>
+      <div class="bd">
+        <div class="step"><i>1</i><span>AQS 直接筛「已连接」的经典蓝牙设备</span></div>
+        <div class="step"><i>2</i><span>取名称与地址，按名字猜设备类型</span></div>
+        <div class="step"><i>3</i><span>拿不到电量时，只报在线状态与原因</span></div>
+        <div class="step"><i>4</i><span>不认识的设备类型直接跳过，不刷屏</span></div>
+        <div class="res warn">与 ② 同 ID 时，去重后保留有电量的那条</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="join">↓&nbsp;&nbsp;四条通道都产出 DeviceSnapshot&nbsp;&nbsp;↓</div>
+
+  <div class="merge">
+    <div class="t">合并（BatteryMonitor.Merge，在 UI 线程执行）</div>
+    <ul>
+      <li><b>统一设备 ID</b>：BLE / 经典蓝牙 / OPPO 都用 <code>bt:{MAC}</code>，罗技用 <code>logi:{序列号}</code>（无序列号则用型号名）——同一台设备被多条通道看到也不会重复显示。</li>
+      <li><b>HID 先跑、蓝牙后并行</b>：实测罗技接收器和蓝牙密集建链会互相拖累（对照实验：启用 OPPO 通道后罗技从 2 秒变 9.4 秒且读不到设备），所以让 HID 独占跑完再放蓝牙。</li>
+      <li><b>只有通道成功时才能判离线</b>：蓝牙服务整条失败时保留上次状态，不会把设备全标灰。</li>
+      <li><b>连续两轮读不到才判离线</b>：无线设备偶发不应答不会让界面闪烁；启动时先沿用上次的在线状态。</li>
+      <li><b>空手而归就补一轮</b>：某条通道这轮一台都没读到，3 秒后自动再试一次（罗技接收器首次请求常被吞掉，第二次基本都能成）。</li>
+      <li><b>有百分比覆盖空值</b>：同一 ID 先收到"未提供电量接口"、后收到真实电量时，电量与说明都会被正确更新。</li>
+      <li><b>少抖动</b>：集合只做增删与位移，不整表重建，面板不会闪。</li>
+    </ul>
+  </div>
+
+  <h2><span class="idx">03</span>协议关键点（实测得出）</h2>
+  <table>
+    <thead><tr><th style="width:180px">关键点</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td class="k">0x11 报告</td><td>HID++ 2.0 长报文：<code>[0x11, 设备索引, 特性索引, 函数&lt;&lt;4|swId, 参数…]</code>，共 20 字节。</td></tr>
+      <tr><td class="k">0xFF 索引</td><td>表示接收器自身。本机 Lightspeed 接收器<b>不响应</b> HID++，真正的鼠标在索引 <code>0x01</code>。</td></tr>
+      <tr><td class="k">0x1004</td><td>UNIFIED_BATTERY。func1 返回 <code>[电量%, 原始档位, 充电状态, 外部供电]</code>，GPW2 只支持这个，不支持 0x1000 / 0x1001。</td></tr>
+      <tr><td class="k">0x180F / 0x2A19</td><td>蓝牙标准电池服务与电量特征，Xbox 手柄、多数 BLE 键鼠与部分 TWS 耳机都提供。</td></tr>
+      <tr><td class="k">0000079A-…A5A5</td><td>OPPO / OnePlus / realme 耳机共用的私有控制通道（RFCOMM，非 BLE）。Windows 设置页对这类耳机不显示电量，系统也没缓存 <code>DEVPKEY_Device_BatteryLevel</code>。</td></tr>
+      <tr><td class="k">AA | Len | Cmd | Seq</td><td>OPO 帧格式：<code>AA</code> 开头，长度用 LEB128 编码，之后是 <code>00 00</code> + 命令(2 字节小端) + Seq(1) + 载荷长度(2) + 载荷。回复命令号 = 请求命令号 | <code>0x8000</code>。</td></tr>
+      <tr><td class="k">0x0106 → 0x8106</td><td>电量查询。载荷 = <code>状态(1) + count(1) + (part, raw) × count</code>；part 01 左耳 / 02 右耳 / 03 盒，raw 的 bit7 = 充电，低 7 位 = 百分比。实测回包：<code>00 02 01 3C 02 32</code> → 左 60% / 右 50%。</td></tr>
+      <tr><td class="k">AQS 已连接过滤</td><td>用"只查已连接设备"的选择器，一轮轮询从 13 秒降到 2 秒，也不再为关机设备白等超时。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>读不到电量的设备怎么办？</b> 界面上显示"在线 · 未提供电量接口"，而不是猜一个数字。<br>
+    机械师 K600 的 ITE 接收器（<code>048D:C102</code>）报告描述符里没有 HID 标准电量用法，也不支持 BLE；
+    OPPO 的私有协议只有 BBK 系（OPPO / OnePlus / realme）耳机才认，其它品牌走不通这两条。README 第四节有完整实测记录。
+  </div>
+
+  <h2><span class="idx">04</span>低功耗都省在哪</h2>
+  <table>
+    <thead><tr><th style="width:180px">手段</th><th>效果</th></tr></thead>
+    <tbody>
+      <tr><td class="k">System.Threading.Timer</td><td>到点才唤醒，关着面板时不做任何渲染。</td></tr>
+      <tr><td class="k">空闲降频</td><td>用户 5 分钟无输入时只跑 1/4 次数（蓝牙射频唤醒是主要成本）。</td></tr>
+      <tr><td class="k">图标按档位缓存</td><td>只在电量档位或低电量状态变化时重画，其余时候复用同一个 GDI 图标。</td></tr>
+      <tr><td class="k">读完即断开</td><td>BLE / OPPO 通道读完立刻释放连接，不常驻占用射频链路。</td></tr>
+      <tr><td class="k">实测占用</td><td>稳态 <b>0.078%</b> 单核、工作集 69 MB、私有内存 15 MB（40 秒 / 60 秒两段采样）。</td></tr>
+    </tbody>
+  </table>
+
+  <footer>PeripheralBattery · 流程图对应代码：App.xaml.cs / Services/BatteryMonitor.cs / Providers/*</footer>
+</div>
+</body>
+</html>
