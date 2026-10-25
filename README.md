@@ -492,3 +492,10 @@ public sealed class MyProvider : IBatteryProvider
   需要额外实现一个走 USB 而非 BLE 的 Provider。BLE 模式现在已经能用。
 - **其他品牌 TWS 耳机**：先跑 `--probe-hfp` 看它认不认 `AT+IPHONEACCEV`（很多非苹果耳机为了兼容 iPhone 会认），  
   再跑 `--probe-headset` 看 SDP 里有没有厂商私有通道。找到了就照 `OpoProvider` 的样子再加一条。
+
+---
+
+## 九、许可证
+
+[MIT](LICENSE) © 2026 yuudachi0621
+
