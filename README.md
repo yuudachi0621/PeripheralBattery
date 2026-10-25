@@ -1,5 +1,9 @@
 # 外设电量 / PeripheralBattery
 
+[![Release](https://img.shields.io/github/v/release/yuudachi0621/PeripheralBattery?color=blue)](https://github.com/yuudachi0621/PeripheralBattery/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)](#)
+
 Windows 托盘小工具：点一下托盘图标，就能看到 2.4G 鼠标、键盘、蓝牙耳机、手柄的剩余电量。  
 界面是 Claude 风格的暖米白面板，常驻后台、几乎不吃 CPU。
 
@@ -98,14 +102,14 @@ Windows 托盘小工具：点一下托盘图标，就能看到 2.4G 鼠标、键
 
 ### 直接运行（已发布版本）
 
-```
-dist\PeripheralBattery.exe
-```
+从 **[Releases](https://github.com/yuudachi0621/PeripheralBattery/releases/latest)** 下载
+`PeripheralBattery.exe`，双击即可。仓库里的 `dist\PeripheralBattery.exe` 是同一份构建产物
+（不随源码提交，所以只在你本机有）。
 
 单文件、免安装。首次运行会自动写入开机自启项，之后登录就直接待在托盘里。  
 如果只想临时看一眼、不想开机自启，在设置里把「开机自动启动」取消即可。
 
-> 需要 .NET 8 桌面运行时；本机装的是 .NET 10 运行时，已通过 `RollForward=LatestMajor` 兼容，直接能跑。
+> 需要 .NET 8 桌面运行时；项目设了 `RollForward=LatestMajor`，装更高大版本运行时也能跑。
 
 ### 自己编译
 
