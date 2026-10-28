@@ -17,6 +17,11 @@ namespace PeripheralBattery.Providers;
 /// </summary>
 internal static class WinRtAsync
 {
+    /// <summary>等待 WinRT 异步操作完成，超时或底层操作异常时返回 null。</summary>
+    /// <param name="operation">要等待的 WinRT 异步操作。</param>
+    /// <param name="milliseconds">最长等待时间，单位为毫秒。</param>
+    /// <returns>操作成功时的结果；超时或失败时为 null。</returns>
+    /// <remarks>超时不会取消底层操作，只是不再等待它。</remarks>
     public static async Task<T?> WithTimeout<T>(Windows.Foundation.IAsyncOperation<T> operation, int milliseconds)
         where T : class
     {

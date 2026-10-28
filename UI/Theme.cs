@@ -8,7 +8,7 @@ using Color = System.Drawing.Color;
 namespace PeripheralBattery.UI;
 
 /// <summary>
-/// 主题：Claude 风格配色，跟随 Windows 的浅色/深色设置。
+/// 主题：Claude 风格配色；启动时读取 Windows 的浅色/深色设置。
 ///
 /// 设计取自 Claude 官网的视觉语言：
 ///   · 底色是带一点暖意的米白/纸色，而不是纯白或冷灰；
@@ -16,7 +16,8 @@ namespace PeripheralBattery.UI;
 ///   · 文字是暖黑，次要文字用中性暖灰，层级靠明度而不是靠加粗；
 ///   · 圆角偏大、不用阴影、分割线极淡 —— 整体安静，不抢注意力。
 ///
-/// 只做一套颜色键，XAML 里统一用 DynamicResource 引用，切换主题时自动生效。
+/// 只做一套颜色键，XAML 里统一用 DynamicResource 引用。当前没有监听系统主题变化；
+/// 若运行期间再次调用 <see cref="Apply"/>，DynamicResource 会采用新颜色。
 /// 电量条的三档颜色（LevelBrush）不在这里，见 <see cref="ApplyLevelColors"/> 的说明。
 /// </summary>
 internal static class Theme

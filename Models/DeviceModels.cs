@@ -6,10 +6,10 @@ using System.Windows.Media;
 
 namespace PeripheralBattery.Models;
 
-/// <summary>设备类型，只用于选图标和分组。</summary>
+/// <summary>设备类型，只用于选图标和排序。</summary>
 public enum DeviceKind { Mouse, Keyboard, Headset, Gamepad, Other }
 
-/// <summary>连接方式，界面上的小徽标。</summary>
+/// <summary>连接方式，显示在设备副标题中。</summary>
 public enum LinkKind { Receiver24G, Bluetooth, Wired }
 
 /// <summary>
@@ -18,15 +18,24 @@ public enum LinkKind { Receiver24G, Bluetooth, Wired }
 /// </summary>
 public sealed class DeviceSnapshot
 {
-    public required string Id { get; init; }        // 稳定标识，用于记忆自定义名称
-    public required string Name { get; init; }      // 设备自报的名称
+    /// <summary>跨轮询稳定的设备标识，用于去重、记忆自定义名称和持久化状态。</summary>
+    public required string Id { get; init; }
+
+    /// <summary>设备自报的显示名称。</summary>
+    public required string Name { get; init; }
+
     public DeviceKind Kind { get; init; } = DeviceKind.Other;
     public LinkKind Link { get; init; } = LinkKind.Receiver24G;
-    public int? Percent { get; init; }              // null = 设备在线但没给电量
+
+    /// <summary>电量百分比；null 表示设备在线但没有可读电量。</summary>
+    public int? Percent { get; init; }
+
+    /// <summary>设备是否报告正在充电；无法确定时保持 false。</summary>
     public bool Charging { get; init; }
 
     /// <summary>
-    /// 是否被 USB 线直接供电（罗技 0x1004 的 [7] 外部供电状态）。
+    /// 当前是否由外部电源供电。来源包括罗技 0x1004 的 [7] 外部供电状态，
+    /// 以及 BatteryMonitor 根据 USB 直连接口推断出的有线供电。
     ///
     /// 和 Charging 的区别：Charging 表示"电池正在被充"，externalPower 表示"现在吃的是 USB 的电"。
     /// 插着线且已充满时，Charging 会变回 false，但设备仍然是 USB 供电。
@@ -36,15 +45,25 @@ public sealed class DeviceSnapshot
     /// </summary>
     public bool ExternalPower { get; init; }
 
-    public string? Note { get; init; }              // 无法读电量时给用户的说明
+    /// <summary>无法读取电量等原因的简短说明，显示在设备副标题或悬停提示中。</summary>
+    public string? Note { get; init; }
 }
 
 /// <summary>一个 Provider 的轮询结果。Ok=false 表示这轮整条通道失败，不能据此判定设备离线。</summary>
 public sealed class ProviderResult
 {
+    /// <summary>本轮通道是否正常工作；false 表示“不知道”，不能据此判定设备离线。</summary>
     public bool Ok { get; init; }
+
+    /// <summary>通道失败时的错误摘要；成功时通常为 null。</summary>
     public string? Error { get; init; }
+
+    /// <summary>本轮实际看到的设备；Ok=true 且列表为空表示通道正常但没有发现设备。</summary>
     public List<DeviceSnapshot> Devices { get; init; } = new();
+
+    /// <summary>创建一条通道失败结果。</summary>
+    /// <param name="error">用于日志和诊断展示的错误摘要。</param>
+    /// <returns><c>Ok=false</c> 且带错误信息的结果。</returns>
     public static ProviderResult Fail(string error) => new() { Ok = false, Error = error };
 }
 
@@ -54,6 +73,7 @@ public sealed class ProviderResult
 /// </summary>
 public sealed class DeviceState : INotifyPropertyChanged
 {
+    /// <summary>与 Provider 快照一致的稳定设备 Id。</summary>
     public string Id { get; }
 
     /// <summary>由哪条通道负责它。合并时按这个判断"通道正常但设备没出现"。</summary>
@@ -111,7 +131,7 @@ public sealed class DeviceState : INotifyPropertyChanged
     }
 
     private int _lowThreshold = 20;
-    /// <summary>低电量阈值（%），由配置同步进来。低于等于它时界面转红。</summary>
+    /// <summary>低电量阈值（%），由配置同步进来。电量小于等于它时界面转红。</summary>
     public int LowThreshold
     {
         get => _lowThreshold;

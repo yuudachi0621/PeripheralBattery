@@ -20,7 +20,7 @@ namespace PeripheralBattery.Services;
 /// 1. 用 System.Threading.Timer（到点才唤醒一次），关掉面板时不做任何渲染；
 /// 2. 用户空闲超过 5 分钟时只跑 1/4 的轮询次数（蓝牙射频唤醒很贵）；
 /// 3. 同一时刻只允许一轮在跑（_busy 互斥），不会因为手动刷新而堆叠；
-/// 4. 只在数值变化时更新图标与界面元素。
+/// 4. 托盘图标按 5% 档位缓存；设备属性通过 INotifyPropertyChanged 推送给可见界面。
 /// </summary>
 public sealed class BatteryMonitor : INotifyPropertyChanged
 {
@@ -38,7 +38,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     private DateTime _lastQuickRetry = DateTime.MinValue;
     private string _lastSummary = "";
 
+    /// <summary>当前在线、且被用户关注的设备，按设备类型和名称排序。</summary>
     public ObservableCollection<DeviceState> Online { get; } = new();
+
+    /// <summary>当前离线、且被用户关注的设备，按最后在线时间倒序排列。</summary>
     public ObservableCollection<DeviceState> Offline { get; } = new();
 
     /// <summary>面板里所有设备（在线 + 离线），设置页的"主设备"下拉框要用。</summary>
@@ -54,6 +57,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         RebuildCollections();
     }
 
+    /// <summary>一轮刷新完成、主设备变化或设备增删后触发，调用方据此同步托盘和提醒状态。</summary>
     public event Action? Changed;
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -68,7 +72,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         // 调整顺序前请确认这个覆盖关系。
         _providers = new IBatteryProvider[]
         {
-            new BluetoothClassicProvider(),   // 经典蓝牙：只报在线状态（耳机等大多没有电量接口）
+            new BluetoothClassicProvider(),   // 经典蓝牙：在线状态 + 系统可提供的 PnP 电量
             new LogitechProvider(),           // 罗技 2.4G（HID++ 2.0），电量最准的一条
             new BleProvider(),                // 蓝牙 GATT（0x180F 电池服务）
             new OpoProvider(),                // OPPO/OnePlus/realme 耳机私有协议（RFCOMM）
@@ -102,7 +106,9 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
             ? null
             : _all.FirstOrDefault(d => d.Id == _config.PrimaryDeviceId);
 
-    /// <summary>把它设为主设备（传 null = 恢复"所有设备里最低"）。</summary>
+    /// <summary>把它设为主设备，并立即保存配置。</summary>
+    /// <param name="state">目标设备；传 null 表示恢复"所有在线设备里最低"。</param>
+    /// <remarks>会更新所有设备的 IsPrimary 标记、触发 Changed，并通过 SaveNow 持久化。</remarks>
     public void SetPrimary(DeviceState? state)
     {
         _config.PrimaryDeviceId = state?.Id ?? "";
@@ -113,7 +119,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         Changed?.Invoke();
     }
 
-    /// <summary>配置被外部改过（设置窗口保存）后，把界面上的主设备标记重新对齐。</summary>
+    /// <summary>配置被外部改过（设置窗口保存）后，把界面上的主设备标记重新对齐，但不再次保存。</summary>
     public void SyncPrimaryFromConfig()
     {
         foreach (var d in _all) d.IsPrimary = d.Id == _config.PrimaryDeviceId;
@@ -122,7 +128,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         Changed?.Invoke();
     }
 
-    /// <summary>标题下面那行小字：有主设备时说明图标跟着谁，否则说明跟的是最低值。</summary>
+    /// <summary>标题下面那行小字：有主设备时说明图标跟着谁；未指定主设备时返回空字符串。</summary>
     public string PrimaryCaption
     {
         get
@@ -146,9 +152,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     public bool ShowOfflineSection => _config.ShowOffline && Offline.Count > 0;
     public bool HasOnline => Online.Count > 0;
 
+    /// <summary>启动轮询计时器；重复调用等同于重新安排计时器。</summary>
     public void Start() => RestartTimer();
 
-    /// <summary>配置里改了间隔后调用。</summary>
+    /// <summary>销毁旧计时器并按当前配置重建：约 300 ms 后首轮，之后按配置间隔执行。</summary>
     public void RestartTimer()
     {
         _timer?.Dispose();
@@ -165,7 +172,9 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         await RefreshAsync(manual: false);
     }
 
-    /// <summary>立即刷新一轮。manual=true 时忽略空闲降频。</summary>
+    /// <summary>立即执行一轮刷新。</summary>
+    /// <param name="manual">true 表示用户主动刷新；若此时已有轮询在跑，会登记一次待刷新而不是并发执行。</param>
+    /// <remarks>本轮结果在 UI Dispatcher 上合并，并在结束后触发 <see cref="Changed"/>。</remarks>
     public async Task RefreshAsync(bool manual)
     {
         if (Interlocked.Exchange(ref _busy, 1) == 1)
@@ -178,7 +187,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         try
         {
             // 分两组跑，不是图省事，是实测出来的：
-            //   第一组 = HID 通道（罗技 2.4G）。它走 USB 接收器，跟蓝牙射频没直接关系，
+            //   第一组 = HID/HID++ 通道。它走 USB，跟蓝牙射频没直接关系，
             //   但实测只要同时有蓝牙在密集建链，罗技那 9 秒的长超时就全跑满，而且读不到设备
             //   （对照实验：禁用 OPPO 通道后罗技稳定 2 秒、100% 读到；启用后变 9.4 秒、0 台）。
             //   所以让它独占先跑完，再放蓝牙类通道并行。
@@ -219,6 +228,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         }
     }
 
+    /// <summary>给单个 Provider 套 25 秒取消上限，并把异常转换成通道失败结果。</summary>
+    /// <param name="provider">要执行的通道。</param>
+    /// <returns>Provider 的结果；抛异常时返回 <c>Ok=false</c>。</returns>
+    /// <remarks>耗时超过 1.5 秒的通道会写一条慢通道日志。</remarks>
     private static async Task<ProviderResult> SafePollAsync(IBatteryProvider provider)
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -239,7 +252,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         }
     }
 
-    /// <summary>把各通道的结果合并进界面集合。</summary>
+    /// <summary>把各通道结果合并进界面集合，并更新在线、历史和持久化状态。</summary>
+    /// <param name="results">与 <c>_providers</c> 顺序一一对应的本轮结果。</param>
+    /// <param name="usbNames">本轮从 USB HID 收集到的产品名，用于有线连接兜底。</param>
+    /// <remarks>只有成功通道才会参与离线判定；未被跟踪的设备不会因本轮被发现而自动加入面板。</remarks>
     private void Merge(ProviderResult[] results, ISet<string> usbNames)
     {
         var okProviders = new HashSet<string>();
@@ -412,6 +428,13 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         d.LinkBeforeWired = null;
     }
 
+    /// <summary>
+    /// 按稳定 Id 新建或更新设备状态。同一 Id 被后来的 Provider 命中时会覆盖类型、链路和状态字段；
+    /// 新快照没有百分比时不会清掉已有百分比，只补充 Note。
+    /// </summary>
+    /// <param name="snapshot">本轮某个通道返回的设备快照。</param>
+    /// <param name="providerName">本次负责该设备的通道名。</param>
+    /// <returns>更新后的设备状态对象。</returns>
     private DeviceState Upsert(DeviceSnapshot snapshot, string providerName)
     {
         var state = _all.FirstOrDefault(d => d.Id == snapshot.Id);
@@ -503,6 +526,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         }
     }
 
+    /// <summary>把当前设备状态同步到配置对象并立即落盘；只读诊断模式下由 ConfigStore 忽略写入。</summary>
     public void SaveNow()
     {
         Remember();
@@ -514,7 +538,9 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     /// <summary>设置里改了间隔后，刷新底部文案。</summary>
     public void RefreshTimerHint() => Raise(nameof(FooterText));
 
-    /// <summary>重命名设备（空字符串 = 恢复默认名称）。</summary>
+    /// <summary>重命名设备并立即保存配置。</summary>
+    /// <param name="state">要修改的设备。</param>
+    /// <param name="newName">新名称；null、空字符串或纯空白表示恢复设备自报名称。</param>
     public void Rename(DeviceState state, string? newName)
     {
         state.CustomName = (newName ?? "").Trim();
@@ -595,7 +621,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
             .ToList();
     }
 
-    /// <summary>把扫描结果里的设备收进面板。返回实际新增的数量。</summary>
+    /// <summary>把扫描结果里的设备收进面板，并立即保存配置。</summary>
+    /// <param name="items">用户在扫描窗口勾选的条目；调用方应只传尚未跟踪的设备。</param>
+    /// <returns>实际新增或恢复跟踪的设备数量。</returns>
+    /// <remarks>方法本身不按 Id 去重；当前 ScanWindow 会过滤 AlreadyAdded 条目后再调用。</remarks>
     public int AddScanned(IEnumerable<ScanItem> items)
     {
         int added = 0;
@@ -603,7 +632,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         {
             if (_all.Any(d => d.Id == item.Id))
             {
-                // 之前在面板里、后来被删掉的：恢复它，自定义名称也还在
+                // 同一 Id 仍在内存但配置记录存在：保留旧名称并重新标记为跟踪。
                 _config.Devices.TryGetValue(item.Id, out var record);
                 if (record == null) continue;
                 record.Tracked = true;
@@ -665,6 +694,8 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     /// 在线时只标记为不跟踪（下次还读得到，但不再显示）；
     /// 已离线时连记录一起删，免得配置里攒一堆垃圾。
     /// </summary>
+    /// <param name="state">要移除的设备。若它是主设备，会同时清空主设备配置。</param>
+    /// <remarks>会重建在线/离线集合、保存配置并触发 Changed。</remarks>
     public void Remove(DeviceState state)
     {
         var wasPrimary = state.Id == _config.PrimaryDeviceId;
@@ -686,10 +717,10 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 托盘悬停提示：**面板里能看到的设备一台一行，全部列出**，电量前置并用竖线分栏。
+    /// 托盘悬停提示：优先把面板里所有在线设备逐行列出，电量前置并用竖线分栏。
     ///
     /// 三条约束在这里打架，处理顺序很重要：
-    ///   1. 产品要求：非折叠区（即面板里的在线设备）有几台就列几台，**不管有没有设主设备**；
+    ///   1. 产品要求：尽量列出全部在线设备，并且**不受主设备设置影响**；
     ///   2. Windows 硬限制：NotifyIcon.Text 最多 63 个字符，超了直接抛异常；
     ///   3. 对齐要求：电量栏要落在同一列，名字才能对齐成一条线。
     ///
@@ -711,12 +742,12 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     ///   · 它每行都跟在电量后面，本身也是定宽渲染，不会破坏对齐；
     ///   · 只占 1 个字符 + 1 个空格，比换成 " — " 之类的分隔符省得多。
     ///
-    /// 设备名上限 DeviceNameLimit = 20 字符，超出用省略号收尾，保证长名字不会
-    /// 把电量挤到提示框外面。
+    /// 常规显示时设备名上限为 DeviceNameLimit = 20 字符；空间不足时还会进一步收窄，
+    /// 最后才减少设备数量并在末尾标注"…等 N 台"。
     /// </summary>
     public string BuildTooltip()
     {
-        // 不管有没有指定主设备，都列出全部在线设备。
+        // 不管有没有指定主设备，都优先列出全部在线设备；63 字符限制下的降级见下方。
         // 主设备只影响**托盘图标**显示哪个数字，不影响悬停提示的内容 ——
         // 用户把鼠标移上来就是想一眼看全所有外设，这里只报一台反而更费解。
         //
@@ -750,11 +781,9 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         // ---------- 兜底：设备太多，改用紧凑格式 ----------
         // 走到这里说明"标准格式（4 位电量栏 + ' | '）"顶破了 63（比如 6 台以上就是）。
         //
-        // 降级顺序是刻意排的，核心原则：**宁可缩排版，也不缩设备名**。
-        // 用户悬停的诉求是"看清是哪台设备、还有多少电"，把 "Xbox 手柄" 截成 "Xbox …"
-        // 就失去了意义 —— 之前就踩过这个坑：为了塞进 63 字符，名字被截到 5 个字符。
-        // 所以按"名字长度 → 电量栏宽度 → 分隔符"逐级压缩（见下面的 attempts 构造顺序），
-        // 最后才减少台数 + 明确告知"…等 N 台"。
+        // 降级目标是优先保留"全部设备"：先保持较完整的名字，同时压缩电量栏和分隔符；
+        // 仍放不下时才逐步收窄名字，最后减少台数并明确告知"…等 N 台"。
+        // 这样普通 2~6 台设备通常不需要牺牲名称，极端数量下也不会悄悄漏掉设备。
 
         string Compose(int take, bool withMore, int nameLimit, int digits, string gap)
         {
@@ -766,8 +795,8 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
         }
 
         var attempts = new List<string>();
-        // ① 先保住"全部列出"，再按"名字完整优先于排版宽松"的顺序压缩：
-        //    名字收窄的代价远大于电量栏和分隔符 —— 用户第一眼看的是"哪台设备"。
+        // ① 先保住"全部列出"：外层逐个收窄名称上限，内层再压缩电量栏和分隔符。
+        //    名称上限从 20 逐步降到 6，兼顾"可辨认"和"尽量不漏设备"。
         for (var limit = DeviceNameLimit; limit >= 6; limit -= 2)
         {
             foreach (var digits in ValueDigitOptions)
@@ -851,7 +880,8 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     ///   光靠 <see cref="Value"/> 里的 PadLeft(3) 让字符数一致，像素宽度仍差 3~6px。
     ///
     /// 代价：补空格要花字符预算，所以台数一多这一版就会塞不下，
-    /// 这时退到兜底链（收窄名字 → 压缩电量栏 → 缩短分隔符 → 减少台数），见 BuildTooltip。
+    /// 这时退到兜底链：在当前名称上限内压缩电量栏和分隔符，再逐步收窄名称，
+    /// 最后减少台数，见 BuildTooltip。
     /// </summary>
     private static string? TryBuildAligned(List<DeviceState> list)
     {
@@ -909,7 +939,7 @@ public sealed class BatteryMonitor : INotifyPropertyChanged
     /// </summary>
     private static string Pad(int value, int digits) => value.ToString().PadLeft(digits);
 
-    /// <summary>按字符数截断，超出用省略号收尾（保证总长不超过 limit）。</summary>
+    /// <summary>按字符数截断，超出用省略号收尾；当 limit &gt; 0 时保证结果长度不超过 limit。</summary>
     internal static string Truncate(string name, int limit)
     {
         if (limit <= 0 || name.Length <= limit) return name;

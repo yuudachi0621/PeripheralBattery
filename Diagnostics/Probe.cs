@@ -18,13 +18,13 @@ namespace PeripheralBattery.Diagnostics;
 ///
 /// 为什么需要它：外设读不到电量时，原因可能在很底层的位置 ——
 /// 接口选错了、特性不支持、接收器没醒、蓝牙设备根本没连上。
-/// 界面上只会显示一个"—"，看不出是哪一层的问题。这个探针把每一层都摊开打印：
+/// 界面通常只会显示“电量未知”图标或简短原因，看不出是哪一层的问题。这个探针把每一层都摊开打印：
 ///   1. 系统里所有 HID 接口（VID/PID/usage/报告长度/路径）；
 ///   2. 罗技接收器上每个设备索引的探活结果、特性表、每个函数的原始回复字节；
 ///   3. 机械师键盘接收器（VID 048D）的报告描述符，看它有没有把电量声明成 HID 用法；
 ///   4. 蓝牙：经典设备列表 + BLE 全量服务/特征，并尝试对经典设备走 BLE 读电池服务。
 ///
-/// 判断顺序建议：先看第 2 段能不能探活（探不到说明设备在休眠，与协议无关），
+/// 判断顺序建议：先看第 2 段能不能探活（探不到时先排查休眠、连接状态和接口选择），
 /// 再看待打印出的 0x1004 回复原始字节，对照 <see cref="HidppChannel.ReadBattery"/> 的注释看 [6]/[7] 位。
 /// </summary>
 internal static class Probe
@@ -138,7 +138,7 @@ internal static class Probe
     ///
     /// 为什么扫它：接收器的 FF89/0010 集合没有输入/输出报告、只有 Feature Report，
     /// 厂商私有数据（电量、充电状态最常见）通常就藏在这里。描述符解析太麻烦，
-    /// 直接逐个 ID 读是最快的验证方式 —— 不支持的 ID 立刻失败，不会有副作用。
+    /// 直接逐个 ID 读是最快的验证方式；GetFeature 是只读操作，但可能阻塞，所以只放在诊断流程里。
     /// 全零的响应也过滤掉（有些设备对任意 ID 都回全零，没有信息量）。
     /// </summary>
     private static void DumpFeatures(List<HidInfo> devices)
@@ -260,7 +260,7 @@ internal static class Probe
     ///
     /// 重点是第 3 段那个实验 —— 经典蓝牙（A2DP）外设能不能从 BLE 侧连上去读 0x180F。
     /// 如果能，就等于多了一条通用电量通道；如果连不上（多数 TWS 耳机是这样），
-    /// 就只能走厂商私有协议（见 OpoProvider / HfpProbe）。
+    /// 通常只能继续尝试厂商私有协议（见 OpoProvider / HfpProbe）。
     /// </summary>
     private static async Task ProbeBluetoothAsync()
     {

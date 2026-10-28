@@ -18,7 +18,7 @@ namespace PeripheralBattery.Providers;
 /// 为什么需要它：这类 TWS 耳机只走经典蓝牙（A2DP + HFP），
 /// 既不实现 BLE 电池服务 0x180F，也拒绝建立 LE 连接，
 /// Windows 系统层也没给它们缓存 DEVPKEY_Device_BatteryLevel。
-/// 唯一能拿到电量的地方是它们自己的控制通道：
+/// 对这类已排查设备，能拿到电量的地方是它们自己的控制通道：
 ///   RFCOMM 服务 0000079A-D102-11E1-9B23-00025B00A5A5（BBK 系共用）
 ///
 /// 协议细节（外层帧怎么切、LEB128 长度、seq 怎么配对）不在这个文件里，

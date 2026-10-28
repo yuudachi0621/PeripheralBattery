@@ -30,6 +30,8 @@ public sealed class LevelStarConverter : IValueConverter
         return new GridLength(percent, GridUnitType.Star);
     }
 
+    /// <summary>该转换器只用于显示，不支持反向转换。</summary>
+    /// <exception cref="NotSupportedException">始终抛出。</exception>
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
@@ -53,6 +55,8 @@ public sealed class BoolToVisibilityConverter : IValueConverter
         return flag ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>该转换器只用于显示，不支持反向转换。</summary>
+    /// <exception cref="NotSupportedException">始终抛出。</exception>
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }

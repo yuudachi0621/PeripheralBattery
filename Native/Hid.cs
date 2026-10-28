@@ -20,7 +20,7 @@ internal sealed class HidInfo
     public ushort UsagePage;
     public ushort Usage;
 
-    /// <summary>输入报告字节数。HID++ 要 20 字节的长报文，所以这个值要够大。</summary>
+    /// <summary>输入报告字节数。HID++ 长报文通常为 20 字节，Provider 还会计较输出报告长度。</summary>
     public int InputLength;
     public int OutputLength;
     public string Product = "";
@@ -241,8 +241,8 @@ internal sealed class HidHandle : IDisposable
 
     // Feature Report 是"设备主动定义的一组可读写的寄存器"，不走输入/输出报告通道。
     // 很多厂商把电池电量、充电状态藏在自定义的 Feature Report 里 —— 这是逆向私有协议的正门。
-    // 注意 HidD_GetFeature 是同步调用：设备不响应时会阻塞一小段（通常几百毫秒），
-    // 不支持的 reportId 则立即返回 false，所以全量扫一遍是安全的。
+    // 注意 HidD_GetFeature 是同步调用，设备不响应时可能阻塞；因此只用于诊断探针，
+    // 不放进正常轮询路径。
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_GetFeature(SafeFileHandle h, byte[] reportBuffer, int reportBufferLength);
 
@@ -281,8 +281,8 @@ internal sealed class HidHandle : IDisposable
     /// 打开 HID 接口；write=false 时只读（某些键盘接口不允许写）。
     ///
     /// 要写权限的接口经常被系统或驱动以独占方式打开，直接失败。
-    /// 这时退回"只读"再试一次 —— 只读通常能拿到，而读电量本来也不需要写。
-    /// （拿不到写权限的后果是 HID++ 发不出请求，但枚举信息、看描述符仍然够用。）
+    /// 这时退回"只读"再试一次：Feature Report 读取通常仍可用，
+    /// 但 HID++ 需要用输出报告发请求，拿不到写权限时这条通道无法完成轮询。
     /// </summary>
     public static HidHandle? Open(string path, bool write = true)
     {
@@ -304,7 +304,8 @@ internal sealed class HidHandle : IDisposable
 
     /// <summary>
     /// 读一个 Feature Report。buffer[0] 填 reportId，返回的数组是完整报告（含 ID 在 [0]）。
-    /// 设备不支持该 ID 或读取失败返回 null。**只读，不改设备状态**，所以可以放心全量扫。
+    /// 设备不支持该 ID 或读取失败返回 null。该调用只读取报告、不修改设备状态，
+    /// 但可能阻塞，因此只用于诊断流程中的全量扫描。
     /// </summary>
     public byte[]? GetFeature(byte reportId)
     {

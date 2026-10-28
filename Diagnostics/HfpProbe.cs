@@ -15,13 +15,13 @@ namespace PeripheralBattery.Diagnostics;
 /// <summary>
 /// 经典蓝牙耳机的电量探针（命令行 --probe-hfp [关键字]）。
 ///
-/// 背景：A2DP 耳机没有 0x180F 电池服务，BLE 侧也连不上，但 HFP（免提协议）里
+/// 背景：不少 A2DP 耳机没有 0x180F 电池服务，BLE 侧也连不上，但 HFP（免提协议）里
 /// 有一条苹果定义的 AT 指令 IPHONEACCEV，用来把电量推给主机：
 ///     AT+IPHONEACCEV=1,1,5       → 1 个参数，类型 1（电量），档位 5 → 5*10+10 = 60%
 /// 很多非苹果的 TWS 耳机也实现了它（因为要兼容 iPhone）。
 ///
-/// 这里做的事：连上 HFP 的 RFCOMM 通道，扮演"免提设备"，把耳机发来的每一行都记下来，
-/// 顺便主动问一次 AT+XAPL / AT+IPHONEACCEV，看它会不会回。
+/// 这里做的事：枚举已配对设备的 RFCOMM 服务并逐个尝试连接，把耳机发来的文本记下来，
+/// 同时主动发送 AT+XAPL / AT+IPHONEACCEV，观察设备是否会返回电量信息。
 /// </summary>
 internal static class HfpProbe
 {

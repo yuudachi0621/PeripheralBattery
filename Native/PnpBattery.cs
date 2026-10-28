@@ -19,8 +19,8 @@ namespace PeripheralBattery.Native;
 /// 早先版本拿它推断"USB 供电"，结果拔了线还显示"充电中"，已被用户投诉并移除。
 /// 判断有线/供电只认「USB 里有没有这台设备的直连接口」，见 BatteryMonitor.ApplyWiredConnections。
 ///
-/// 注意这些属性是系统缓存：设备状态变化时蓝牙栈会更新它，
-/// 轮询间隔（默认 60 秒）远大于更新延迟，读它足够新鲜。
+/// 注意这些属性是系统缓存，更新时机由蓝牙栈决定，可能滞后于设备实际状态；
+/// 这里每轮重新读取，不做本地长期缓存，也不把缺失值推断成 0。
 /// 属性不存在 / 类型不对时一律当"没有该信息"，绝不猜。
 /// </summary>
 internal static class PnpBattery
@@ -72,7 +72,7 @@ internal static class PnpBattery
     }
 
     /// <summary>
-    /// 从 BTHENUM\DEV_A1B2C3D4E5F6\7&… 里提取蓝牙地址（此处地址为示例）。
+    /// 从 <c>BTHENUM\DEV_A1B2C3D4E5F6\7&amp;…</c> 里提取蓝牙地址（此处地址为示例）。
     /// 地址是 12 位大写十六进制；解析失败返回 null（非蓝牙 devnode 不该出现在这个类里，但防御一下）。
     /// </summary>
     private static ulong? ExtractAddress(string instanceId)

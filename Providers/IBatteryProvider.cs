@@ -10,7 +10,8 @@ namespace PeripheralBattery.Providers;
 /// 以后要加 XBOX 有线手柄，只要再实现一个 Provider 并在 Monitor 里注册即可。
 ///
 /// 约定（新写一个 Provider 时必须遵守，否则会拖垮整轮轮询）：
-///   · 只返回**这一轮看到的设备**，不要自己缓存上次的结果 —— 合并与离线判定由 Monitor 负责；
+///   · 只返回**这一轮看到的设备**，不要缓存上一轮的设备结果（连接句柄等基础设施状态可以复用）——
+///     合并与离线判定由 Monitor 负责；
 ///   · 同一个物理设备在不同通道里必须用同一个 Id（如蓝牙都写 $"bt:{地址}"），
 ///     否则合并时会被当成两台设备；
 ///   · 能省电就省电：读完立刻断开连接，别让射频常驻（BleProvider / OpoProvider 是范例）；
@@ -22,7 +23,9 @@ public interface IBatteryProvider
     /// <summary>通道名，用于日志、界面副标题和「哪个通道失败」的判断。</summary>
     string Name { get; }
 
-    /// <summary>轮询一次。实现方要保证不抛异常（抛了也不致命，Monitor 会兜住）。</summary>
+    /// <summary>轮询一次。实现方应自行处理可预期异常；即使抛出，Monitor 也会兜住并记为该通道失败。</summary>
+    /// <param name="ct">本轮轮询的取消信号。实现应尽快响应，但底层 WinRT 操作未必能强制取消。</param>
+    /// <returns>通道结果。整条通道不可用时返回 <c>Ok=false</c>，不能用一个失败的设备列表冒充成功。</returns>
     Task<ProviderResult> PollAsync(CancellationToken ct);
 }
 
@@ -37,6 +40,9 @@ public interface IBatteryProvider
 /// </summary>
 public static class DeviceKindGuesser
 {
+    /// <summary>根据设备名称中的型号关键词猜测类型。</summary>
+    /// <param name="name">Provider 读取到的设备名；为空时返回 <see cref="DeviceKind.Other"/>。</param>
+    /// <returns>用于图标和排序的设备类型；无法识别时返回 <see cref="DeviceKind.Other"/>。</returns>
     public static DeviceKind Guess(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return DeviceKind.Other;

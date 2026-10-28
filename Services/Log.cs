@@ -11,13 +11,16 @@ namespace PeripheralBattery.Services;
 ///
 /// 采样策略：正常轮询的结果**只在变化时**才写（见 BatteryMonitor.Merge），
 /// 否则每分钟一条，一晚上就把 200KB 刷满、把真正有用的错误冲掉。
-/// 锁是必要的 —— 轮询线程、UI 线程、单实例监听线程都会写这里。
+/// 锁是必要的 —— 轮询线程、UI 线程和诊断流程都会写这里。
 /// </summary>
 internal static class Log
 {
     private static readonly object Gate = new();
     private static readonly string Path = System.IO.Path.Combine(ConfigStore.Dir, "app.log");
 
+    /// <summary>向用户日志追加一条带本地时间戳的记录。</summary>
+    /// <param name="message">要写入的内容；调用方负责避免记录敏感信息。</param>
+    /// <remarks>日志超过约 200 KB 时会先删除旧文件；任何 I/O 失败都会被吞掉。</remarks>
     public static void Write(string message)
     {
         try
@@ -40,6 +43,8 @@ internal static class Log
         }
     }
 
-    /// <summary>记一条异常，带上发生位置，方便在日志里 grep "[错误]"。</summary>
+    /// <summary>记一条异常，带上发生位置，方便在日志里检索 "[错误]"。</summary>
+    /// <param name="where">异常发生的位置或功能名。</param>
+    /// <param name="ex">要记录的异常。</param>
     public static void Error(string where, Exception ex) => Write($"[错误] {where}: {ex}");
 }

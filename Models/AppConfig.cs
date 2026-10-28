@@ -18,7 +18,7 @@ namespace PeripheralBattery.Models;
 /// </summary>
 public sealed class DeviceRecord
 {
-    /// <summary>用户改过的名字；空 = 没用改过，用 DefaultName。</summary>
+    /// <summary>用户改过的名字；空 = 没有改过，用 DefaultName。</summary>
     public string CustomName { get; set; } = "";
 
     /// <summary>设备自报的名字，同时是"恢复默认名称"的依据。</summary>
@@ -72,13 +72,14 @@ public sealed class AppConfig
     /// <summary>低电量时弹 Windows 通知气泡。</summary>
     public bool NotifyLowBattery { get; set; } = true;
 
-    /// <summary>低电量阈值（%）。低于等于它就提醒、托盘图标转红。</summary>
+    /// <summary>低电量阈值（%）。未充电设备的电量小于等于它时触发提醒，面板颜色也以此为红色界线。</summary>
     public int LowBatteryPercent { get; set; } = 20;
 
     /// <summary>
-    /// 主设备 Id（空 = 未指定，托盘图标显示所有设备里的最低电量）。
+    /// 主设备 Id（空 = 未指定，托盘图标显示所有在线、已关注设备里的最低电量）。
     ///
-    /// 主设备**只影响托盘图标上画哪个数字**。悬停提示和面板列表始终列出所有设备 ——
+    /// 主设备**只影响托盘图标上画哪个数字**。面板列出所有已关注设备；悬停提示优先列出
+    /// 所有在线已关注设备，只有超过 Windows 63 字符限制时才降级 ——
     /// 用户把鼠标移到托盘图标上就是想一眼看全所有外设，只报一台反而更费解。
     /// </summary>
     public string PrimaryDeviceId { get; set; } = "";
@@ -96,9 +97,11 @@ public static class ConfigStore
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    /// <summary>配置、日志和诊断辅助文件使用的用户数据目录。</summary>
     public static string Dir { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PeripheralBattery");
 
+    /// <summary><see cref="Dir"/> 下的配置文件完整路径。</summary>
     public static string FilePath { get; } = Path.Combine(Dir, "config.json");
 
     /// <summary>
@@ -111,6 +114,10 @@ public static class ConfigStore
     /// </summary>
     public static bool ReadOnly { get; set; }
 
+    /// <summary>
+    /// 读取并规范化配置。文件不存在、JSON 损坏或反序列化返回 null 时使用默认配置。
+    /// </summary>
+    /// <returns>可直接交给运行时代码使用的配置对象；不会返回 null。</returns>
     public static AppConfig Load()
     {
         try
@@ -134,6 +141,11 @@ public static class ConfigStore
         return new AppConfig();
     }
 
+    /// <summary>
+    /// 先写临时文件再替换正式文件，尽量避免崩溃或断电留下半截 JSON。
+    /// 只读诊断模式会直接返回；目录创建或写盘失败也会静默忽略，不影响主流程。
+    /// </summary>
+    /// <param name="cfg">要持久化的配置对象。</param>
     public static void Save(AppConfig cfg)
     {
         // 诊断/自检模式下绝不碰真实配置文件（见 ReadOnly 的说明）

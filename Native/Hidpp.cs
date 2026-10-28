@@ -134,6 +134,7 @@ internal sealed class HidppChannel : IDisposable
     /// 读电量。返回 (百分比, 是否在充电, 是否由外部直接供电)；读不到返回 null。
     /// 优先级：0x1004 统一电量（最准，带充电 + 外部供电状态）→ 0x1000 电量百分比 → 0x1001 电压换算。
     /// </summary>
+    /// <returns>成功时为百分比、充电状态和外部供电状态；设备不提供任一电量特性时为 null。</returns>
     public (int percent, bool charging, bool externalPower)? ReadBattery()
     {
         // 1) UNIFIED_BATTERY：func1 getStatus → [4]=电量% [5]=原始档位 [6]=充电状态 [7]=外部供电状态

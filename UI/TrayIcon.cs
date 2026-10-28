@@ -8,7 +8,7 @@ namespace PeripheralBattery.UI;
 
 /// <summary>
 /// 托盘图标：在 16×16 里画一个电池，显示"该关注的那个电量"。
-/// 具体显示谁的数由 <see cref="BatteryMonitor.TrayPercent"/> 决定 ——
+/// 具体显示谁的数由 <see cref="PeripheralBattery.Services.BatteryMonitor.TrayPercent"/> 决定 ——
 /// 设了主设备就是主设备的电量，没设就是所有在线设备里的最低值（和 Twinkle Tray 一样，一个图标看全局）。
 ///
 /// 只有在电量档位（按 5% 分档）或低电量状态变化时才重新生成图标；
@@ -70,7 +70,7 @@ public sealed class TrayIcon : IDisposable
     /// <param name="tooltip">悬停提示文字，内部会再按 63 字符截断一次兜底。</param>
     /// <param name="low">
     /// 是否按"低电量"样式画（红电池 + 感叹号角标）。
-    /// 由 <see cref="BatteryMonitor.TrayIsLow"/> 算 —— 它会排除正在充电的设备，
+    /// 由 <see cref="PeripheralBattery.Services.BatteryMonitor.TrayIsLow"/> 算 —— 它会排除正在充电的设备，
     /// 这个判断不能放在本类里，否则两套口径会打架。
     /// </param>
     public void Update(int? percent, string tooltip, bool low)
@@ -89,6 +89,9 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>弹一条 Windows 通知气泡（Win10/11 会渲染成系统通知）。</summary>
+    /// <param name="title">通知标题。</param>
+    /// <param name="text">通知正文。</param>
+    /// <param name="warning">true 使用警告图标，否则使用信息图标。</param>
     public void ShowBalloon(string title, string text, bool warning)
     {
         _notify.ShowBalloonTip(8000, title, text, warning ? Forms.ToolTipIcon.Warning : Forms.ToolTipIcon.Info);
@@ -118,6 +121,9 @@ public sealed class TrayIcon : IDisposable
     /// 配色刻意比面板里的电量条更亮一档：面板是米白底，托盘多半是深色任务栏，
     /// 同一套颜色在两边看起来的亮度不一样。
     /// </summary>
+    /// <param name="percent">要显示的电量；null 绘制“无数据”图标。</param>
+    /// <param name="low">是否附加低电量角标并使用警示色。</param>
+    /// <returns>调用方拥有的图标副本；调用方负责释放。</returns>
     internal static Icon RenderIcon(int? percent, bool low = false)
     {
         // 画布故意用 32×32（系统缩到 16×16 显示）：直接按 16 画的话，

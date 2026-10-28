@@ -24,8 +24,10 @@ internal static class StartupManager
 
     /// <summary>
     /// 把注册表写成 enabled 指定的状态。幂等 —— 每次都覆盖写，不做"要不要改"的判断，
-    /// 这样即使用户手动删过注册表项，程序一启动也能自动补回来。
+    /// 因此启用时即使用户手动删过注册表项，程序一启动也会自动补回来。
     /// </summary>
+    /// <param name="enabled">true 写入当前用户 Run 项；false 删除该项。</param>
+    /// <remarks>注册表被策略限制或无权访问时静默失败，不影响主功能。</remarks>
     public static void Apply(bool enabled)
     {
         try
@@ -44,6 +46,8 @@ internal static class StartupManager
         }
     }
 
+    /// <summary>检查当前用户 Run 项是否存在且非空；读取失败时返回 false。</summary>
+    /// <returns>注册表中存在有效的 <c>PeripheralBattery</c> 启动项时为 true。</returns>
     public static bool IsEnabled()
     {
         try

@@ -12,7 +12,7 @@ namespace PeripheralBattery.Providers;
 
 /// <summary>
 /// 蓝牙 LE 通道：标准电池服务（0x180F）里的电量特征（0x2A19）。
-/// 覆盖范围：Xbox 手柄（Series 手柄在 BLE 下自带 0x180F）、大部分 BLE 键盘鼠标、
+/// 覆盖范围：暴露 BAS 的 BLE 设备，例如 BLE 模式下的 Xbox Series 手柄、大部分 BLE 键盘鼠标、
 /// 以及实现了 BAS 的 TWS 耳机。
 ///
 /// 省电做法：只按服务 UUID 查一次电池服务（不做全量服务发现），读完立刻 Dispose 掉
@@ -59,7 +59,7 @@ public sealed class BleProvider : IBatteryProvider
         try
         {
             device = await WinRtAsync.WithTimeout(BluetoothLEDevice.FromIdAsync(info.Id), 4000);
-            if (device == null) return null;   // 设备关机 / 不在范围内
+            if (device == null) return null;   // 无法打开设备：关机、不可达或权限不足等
 
             var name = string.IsNullOrWhiteSpace(device.Name) ? info.Name : device.Name;
             if (string.IsNullOrWhiteSpace(name)) return null;
@@ -68,7 +68,7 @@ public sealed class BleProvider : IBatteryProvider
                 device.GetGattServicesForUuidAsync(GattServiceUuids.Battery, BluetoothCacheMode.Uncached), 6000);
 
             if (services == null || services.Status != GattCommunicationStatus.Success || services.Services.Count == 0)
-                return null;   // 没有标准电池服务，交给经典蓝牙通道去显示"在线但无电量"
+                return null;   // 本通道跳过；若设备也被经典蓝牙通道看到，由那条通道报"在线但无电量"
 
             int? level = null;
 

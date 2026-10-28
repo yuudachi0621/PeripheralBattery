@@ -14,7 +14,7 @@ namespace PeripheralBattery.Diagnostics;
 /// <summary>
 /// OPPO / OnePlus / realme 耳机私有协议探针（命令行 --probe-opo [关键字]）。
 ///
-/// 用来验证 OpoProvider 的协议实现是否正确，把每条收发都打印出来。
+/// 用来验证 OpoProvider 的协议实现是否正确，打印每条查询和原始回复字节。
 /// 协议细节见 Providers/OpoLink.cs 的注释。
 /// </summary>
 internal static class OpoProbe

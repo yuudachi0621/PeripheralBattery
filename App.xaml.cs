@@ -125,7 +125,7 @@ public partial class App : Application
             return;
         }
 
-        // 开发用：把面板离屏渲染成图片，核对排版（不弹窗）
+        // 开发用：把面板离屏渲染成图片，核对排版（不弹窗；必须同时提供输出路径）
         var shotIndex = Array.IndexOf(e.Args, "--ui-shot");
         if (shotIndex >= 0 && shotIndex + 1 < e.Args.Length)
         {
@@ -323,7 +323,8 @@ public partial class App : Application
 
     /// <summary>
     /// 退出收尾。即使 ExitApp 已经做过一遍，这里也要再做 ——
-    /// 用户可能从任务管理器/关机流程直接结束进程，那时只会走 OnExit。
+    /// 托管关闭流程可能只走到这里；强制终止或原生崩溃则不会执行 OnExit，
+    /// 因此正常运行期间还会定期保存配置，降低异常退出的数据损失。
     /// 配置的 SaveNow 是幂等的，重复调用无害。
     /// </summary>
     protected override void OnExit(ExitEventArgs e)

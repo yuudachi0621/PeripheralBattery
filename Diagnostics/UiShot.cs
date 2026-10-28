@@ -78,6 +78,9 @@ internal static class UiShot
     /// 一旦把 Content 摘下来挂到别处，这些引用就断了 —— 渲染出来会缺样式，跟真实界面对不上。
     /// 保持窗口为父级，作用域就完整。
     /// </summary>
+    /// <param name="window">要离屏渲染的窗口实例。</param>
+    /// <param name="width">目标窗口宽度，单位为 WPF 设备无关像素。</param>
+    /// <param name="outputPath">PNG 输出路径。</param>
     /// <param name="fixedHeight">窗口高度固定时（比如扫描窗口靠 * 行撑满）传进来，否则按内容高度。</param>
     private static void RenderInWindow(Window window, double width, string outputPath, double? fixedHeight = null)
     {
@@ -100,7 +103,7 @@ internal static class UiShot
         //
         // Measure 的可用宽度给的是"窗口内容区宽度"（不含边框），
         // 根元素自己的 Margin 会在这个宽度里被扣掉 —— 这正是我们要的：
-        // 内容宽度 = 可用宽度 - 左右 Margin = 348，Marrange 位置从 (margin.Left, margin.Top) 开始。
+        // 内容宽度 = 可用宽度 - 左右 Margin = 348，Arrange 位置从 (margin.Left, margin.Top) 开始。
         content.Width = double.NaN;
 
         // 固定高度的窗口（扫描窗口里有 * 行，高度靠窗口本身决定）要给个确定的高度约束，

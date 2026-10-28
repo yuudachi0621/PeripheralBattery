@@ -50,6 +50,8 @@ internal static class TextMetrics
     /// 用 MeasureString + 关闭"两端多余留白"，否则 GDI+ 会额外加上
     /// 一点边距，多个字符累加后误差能到几个像素。
     /// </summary>
+    /// <param name="text">要测量的文本。</param>
+    /// <returns>文本在当前提示框字体下的像素宽度；空字符串返回 0。</returns>
     public static float Width(string text)
     {
         if (string.IsNullOrEmpty(text)) return 0f;
@@ -69,6 +71,9 @@ internal static class TextMetrics
     ///
     /// 上限 40 个空格是保险：防止某种极端字体度量下补出超长字符串，把 63 字符预算一次吃光。
     /// </summary>
+    /// <param name="current">当前文本。</param>
+    /// <param name="targetWidth">目标像素宽度。</param>
+    /// <returns>需要补的空格数，范围为 0~40。</returns>
     public static int SpacesToPad(string current, float targetWidth)
     {
         var gap = targetWidth - Width(current);
@@ -93,6 +98,9 @@ internal static class TextMetrics
     /// 补空格而不是补别的字符，是因为空格最窄（3px），
     /// 同样的像素缺口占用的字符串长度最少 —— 在 63 字符的预算下这很关键。
     /// </summary>
+    /// <param name="text">要补齐的文本。</param>
+    /// <param name="targetWidth">目标像素宽度。</param>
+    /// <returns>左侧补足空格后的文本；已经达到或超过目标宽度时原样返回。</returns>
     public static string PadToWidth(string text, float targetWidth)
     {
         var pad = SpacesToPad(text, targetWidth);

@@ -114,7 +114,11 @@ internal sealed class OpoLink : IDisposable
         }
     }
 
-    /// <summary>发一条查询并等回复；超时返回 null。</summary>
+    /// <summary>发一条查询并等待匹配 (seq, cmd) 的回复。</summary>
+    /// <param name="cmd">查询命令号。</param>
+    /// <param name="timeoutMs">等待回复的最长时间。</param>
+    /// <param name="ct">取消信号。</param>
+    /// <returns>回复载荷；超时、取消或发送失败时返回 null。</returns>
     public async Task<byte[]?> QueryAsync(ushort cmd, int timeoutMs, CancellationToken ct)
     {
         var seq = NextSeq();
@@ -176,9 +180,12 @@ internal sealed class OpoLink : IDisposable
 
     /// <summary>
     /// 解析 0x8106 电量回复：状态(1) + count(1) + (part, raw) × count。
-    /// 有耳机就取耳机里的最低值（左右耳差得多时，低的那个才是真续航），
+    /// 有耳机就取耳机里的最低值（左右耳差得多时，低的那个才是真续航）；
+    /// 只要任意一只耳机上报充电位，返回的 charging 就为 true。
     /// 只有充电盒在线时才用盒子的电量。
     /// </summary>
+    /// <param name="payload">0x8106 回复中已去掉外层帧头的载荷。</param>
+    /// <returns>解析出的电量和充电状态；载荷不足、数量字段异常或没有有效电量时返回 null。</returns>
     public static (int percent, bool charging)? PickLevel(byte[] payload)
     {
         if (payload.Length < 2) return null;

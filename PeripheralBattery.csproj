@@ -15,7 +15,7 @@
     <!-- 程序图标：任务栏 / 开始菜单 / 资源管理器 / 文件属性 都用它。
          生成脚本见 tools/make_icon.py（改了配色就重跑一次）。 -->
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <!-- 本机只装了 .NET 6/7/10 运行时，允许 net8 程序在更高大版本运行时上跑 -->
+    <!-- 允许框架依赖的 net8 程序在安装了更高主版本 .NET 运行时时尝试启动；兼容性仍以实际运行验证为准 -->
     <RollForward>LatestMajor</RollForward>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
     <!-- WFAC010 是 WinForms 分析器对清单里 DPI 设置的提醒；本项目是 WPF，DPI 就该写在清单里 -->

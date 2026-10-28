@@ -38,14 +38,14 @@ internal static class Power
 
 /// <summary>
 /// 窗口外观相关的小工具：靠 DWM 的属性（DwmSetWindowAttribute）调整系统绘制的部分。
-/// 好处是不用自己画标题栏；代价是这些属性号是"未公开文档"的，
-/// 所以每个调用都包了 try/catch，系统不认就静默跳过，界面退化成默认样式而不是崩掉。
+/// 好处是不用自己画标题栏；这些属性在不同 Windows 版本上的支持情况不一致，
+/// 所以调用处忽略返回值和异常，系统不认时就退化成默认样式。
 /// </summary>
 internal static class WindowFx
 {
     /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE（Win11 才认识）。</summary>
     private const int DwmwaWindowCornerPreference = 33;
-    /// <summary>DWMWA_USE_IMMERSIVE_DARK_MODE（Win10 1809+ 起支持）。</summary>
+    /// <summary>DWMWA_USE_IMMERSIVE_DARK_MODE（Win10 1809+ 起支持，旧版本忽略）。</summary>
     private const int DwmaUseImmersiveDarkMode = 20;
 
     [DllImport("dwmapi.dll")]

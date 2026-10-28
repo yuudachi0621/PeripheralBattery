@@ -9,10 +9,11 @@ using PeripheralBattery.Native;
 namespace PeripheralBattery.Providers;
 
 /// <summary>
-/// 罗技 2.4G（Lightspeed / Unifying）通道，走 HID++ 2.0。
+/// 罗技 HID++ 2.0 通道，主要覆盖 Lightspeed / Unifying 等 2.4G 设备；
+/// 同一套 HID++ 接口也可能枚举到直连设备。
 /// 实测（GPW2 / PRO X SUPERLIGHT 2 SE）：
 ///   · 能说话的接口是 usage page 0xFF00、输入输出报告都是 20 字节的那个；
-///   · 接收器自身（索引 0xFF）不响应 HID++，真正的设备在索引 0x01；
+///   · 在这台被测接收器上，接收器自身（索引 0xFF）不响应 HID++，真正的设备在索引 0x01；
 ///   · 该鼠标不支持 0x1000/0x1001，只支持 0x1004 统一电量。
 /// </summary>
 public sealed class LogitechProvider : IBatteryProvider
@@ -48,7 +49,7 @@ public sealed class LogitechProvider : IBatteryProvider
 
             if (candidates.Count == 0)
             {
-                DropHandle();   // 接收器拔了
+                DropHandle();   // 没有可用的 HID++ 接口：接收器拔出或设备未暴露
                 return new ProviderResult { Ok = true };
             }
 
@@ -92,7 +93,7 @@ public sealed class LogitechProvider : IBatteryProvider
                 handle.Dispose();
             }
 
-            return new ProviderResult { Ok = true };   // 接收器在但没有能读电量的设备
+            return new ProviderResult { Ok = true };   // 接口存在，但没有可识别出电量的设备
         }
         catch (Exception ex)
         {
@@ -162,6 +163,8 @@ public sealed class LogitechProvider : IBatteryProvider
             Id = info is { } fi && fi.unitId > 0 ? $"logi:{fi.unitId:X8}" : $"logi:{displayName}",
             Name = displayName,
             Kind = DeviceKindGuesser.Guess(name),
+            // HID++ 路径本身无法可靠区分接收器与直连；统一显示 2.4G，
+            // 有线供电状态由 ExternalPower / USB 兜底表达。
             Link = LinkKind.Receiver24G,
             Percent = battery?.percent,
             Charging = battery?.charging ?? false,
